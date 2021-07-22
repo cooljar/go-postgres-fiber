@@ -59,7 +59,7 @@ $ migrate -path ./platform/migrations -database "postgres://username:password@lo
 Go to your API Docs page: [127.0.0.1:3000/swagger/index.html](http://127.0.0.1:3000/swagger/index.html)
 <br>
 API Docs page will be look like:
-<br><img src="https://raw.githubusercontent.com/cooljar/go-fiber-postgres-jwt/main/sc.png" width="500">
+<br><img src="https://raw.githubusercontent.com/cooljar/go-postgres-fiber/main/sc.png" width="500">
 
 ## Testing
 - Inspects source code for security problems using [gosec](https://github.com/securego/gosec). You need to install it first.
