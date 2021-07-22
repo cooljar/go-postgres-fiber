@@ -1,0 +1,17 @@
+# Environment settings:
+export SERVER_URL="0.0.0.0:3000"
+export SERVER_READ_TIMEOUT=60
+export JWT_SECRET_KEY="secretOfJwt"
+export JWT_SECRET_KEY_EXPIRE_MINUTES=15
+export DB_SERVER_URL="host=127.0.0.1 port=5432 user=db_user password=db_password dbname=db_name sslmode=disable"
+
+# Download all the dependencies that are required in your source files and update go.mod file with that dependency and
+# remove all dependencies from the go.mod file which are not required in the source files.
+go mod tidy
+
+# Applying database migrations
+# Will print 'no change' message if its no migration to apply
+migrate -path ./platform/migrations -database "postgres://db_user:db_password@localhost:5432/db_name?sslmode=disable" up
+
+# Run app
+go run main.go

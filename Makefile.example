@@ -1,0 +1,78 @@
+.PHONY: test security run stop
+
+NETWORK_NAME="dev-network"
+NETWORK_SUBNET="172.18.0.0/16"
+
+SERVER_PORT = 3000
+CONTAINER_POSTGRES_DB_USER = docker_fiber
+CONTAINER_POSTGRES_DB_PASSWORD = 12345678
+CONTAINER_POSTGRES_PORT_DOCKER_HOST = 5433
+CONTAINER_POSTGRES_PORT_CONTAINER = 5432
+CONTAINER_POSTGRES_IP = 172.18.0.2
+BUILD_DIR = $(PWD)/app
+MIGRATIONS_FOLDER = $(PWD)/platform/migrations
+MIGRATIONS_DATABASE_URL = postgres://$(CONTAINER_POSTGRES_DB_USER):$(CONTAINER_POSTGRES_DB_PASSWORD)@localhost:$(CONTAINER_POSTGRES_PORT_DOCKER_HOST)/$(CONTAINER_POSTGRES_DB_USER)?sslmode=disable
+
+security:
+	gosec -quiet ./...
+
+test: security
+	go test -v -timeout 30s -coverprofile=cover.out -cover ./...
+	go tool cover -func=cover.out
+
+# Create new network named dev-network if not exist
+docker_network:
+	docker network inspect $(NETWORK_NAME) >/dev/null 2>&1 || \
+    docker network create -d bridge --subnet=$(NETWORK_SUBNET) $(NETWORK_NAME)
+
+docker_postgres:
+	docker run --rm -d \
+    		--name postgres-container \
+    		-e POSTGRES_USER=$(CONTAINER_POSTGRES_DB_USER) \
+    		-e POSTGRES_PASSWORD=$(CONTAINER_POSTGRES_DB_PASSWORD) \
+    		-p $(CONTAINER_POSTGRES_PORT_DOCKER_HOST):$(CONTAINER_POSTGRES_PORT_CONTAINER) \
+    		postgres
+	docker network connect --ip $(CONTAINER_POSTGRES_IP) $(NETWORK_NAME) postgres-container
+migrate_up:
+	migrate -path $(MIGRATIONS_FOLDER) -database "$(MIGRATIONS_DATABASE_URL)" up
+
+migrate_down:
+	migrate -path $(MIGRATIONS_FOLDER) -database "$(MIGRATIONS_DATABASE_URL)" down
+
+migrate_force:
+	migrate -path $(MIGRATIONS_FOLDER) -database "$(MIGRATIONS_DATABASE_URL)" force $(version)
+
+swag:
+	swag init
+
+docker_fiber_build_image:
+	docker build -t fiber-app .
+
+docker_fiber: docker_fiber_build_image
+	docker run -d \
+        		--name fiber-app-container \
+        		--network $(NETWORK_NAME) \
+        		-p $(SERVER_PORT):$(SERVER_PORT) \
+        		-e SERVER_URL="0.0.0.0:$(SERVER_PORT)" \
+        		-e SERVER_READ_TIMEOUT=60 \
+        		-e JWT_SECRET_KEY="secretOfJwt" \
+        		-e JWT_SECRET_KEY_EXPIRE_MINUTES=15 \
+        		-e SMTP_HOST="smtp.gmail.com" \
+        		-e SMTP_PORT="587" \
+        		-e SMTP_SENDER_NAME="Tester App <cointrade.exchg@gmail.com>" \
+        		-e SMTP_AUTH_EMAIL="cointrade.exchg@gmail.com" \
+        		-e SMTP_AUTH_PASSWORD="fecdaj-sensu9-Devtoc" \
+        		-e DB_SERVER_URL="host=$(CONTAINER_POSTGRES_IP) port=$(CONTAINER_POSTGRES_PORT_CONTAINER) user=$(CONTAINER_POSTGRES_DB_USER) password=$(CONTAINER_POSTGRES_DB_PASSWORD) dbname=$(CONTAINER_POSTGRES_DB_USER) sslmode=disable" \
+        		fiber-app
+
+run: docker_network docker_postgres swag docker_fiber migrate_up
+
+stop: docker_stop_fiber docker_stop_postgres
+	docker network rm $(NETWORK_NAME)
+
+docker_stop_postgres:
+	docker container stop postgres-container
+
+docker_stop_fiber:
+	docker container stop fiber-app-container
+	docker container rm fiber-app-container
